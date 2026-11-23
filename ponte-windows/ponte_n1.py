@@ -77,9 +77,72 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=worker,args=(urls,),daemon=True).start()
             return self.reply(202,{"ok":True,"accepted":len(urls),"folder":str(FOLDER)})
         except Exception as e:return self.reply(400,{"error":str(e)})
+
+# Editor local: upload somente a partir da origem autorizada e do próprio computador.
+EDIT_FOLDER=Path.home()/"Downloads"/"ESTILO_N1_Editados"
+EDIT_FOLDER.mkdir(parents=True,exist_ok=True)
+edit_state={"running":False,"finished":False,"error":"","output":"","clips":0}
+edit_lock=threading.Lock()
+def edit_worker(source):
+    try:
+        from editor_n1 import edit
+        target=EDIT_FOLDER/("editado_"+str(int(__import__("time").time()))+".mp4")
+        result=edit(source,target,subtitle=True)
+        with edit_lock: edit_state.update(running=False,finished=True,error="",output=str(target),clips=result["clips"])
+    except Exception as exc:
+        with edit_lock: edit_state.update(running=False,finished=True,error=str(exc),output="")
+    finally:
+        try: source.unlink(missing_ok=True)
+        except OSError: pass
+
+class EditorHandler(Handler):
+    def do_GET(self):
+        if self.path=="/edit-status":
+            if not self.allowed():return self.reply(403,{"error":"Origem não autorizada"})
+            with edit_lock: snapshot=dict(edit_state)
+            return self.reply(200,{"ok":True,**snapshot})
+        if self.path=="/edit-result":
+            if not self.allowed():return self.reply(403,{"error":"Origem não autorizada"})
+            with edit_lock: path=Path(edit_state["output"]) if edit_state["output"] else None
+            if not path or not path.is_file():return self.reply(404,{"error":"Vídeo ainda não disponível"})
+            self.send_response(200);self.headers_cors()
+            self.send_header("Content-Type","video/mp4")
+            self.send_header("Content-Disposition",'attachment; filename="ESTILO_N1_editado.mp4"')
+            self.send_header("Content-Length",str(path.stat().st_size))
+            self.end_headers()
+            with path.open("rb") as video:
+                shutil.copyfileobj(video,self.wfile)
+            return
+        return super().do_GET()
+    def do_POST(self):
+        if self.path!="/edit":return super().do_POST()
+        if not self.allowed():return self.reply(403,{"error":"Origem não autorizada"})
+        if self.headers.get("Content-Type","").split(";")[0]!="video/mp4":
+            return self.reply(415,{"error":"Envie um vídeo MP4"})
+        try: length=int(self.headers.get("Content-Length","0"))
+        except ValueError:return self.reply(400,{"error":"Tamanho inválido"})
+        if length<1 or length>250*1024*1024:return self.reply(413,{"error":"Máximo de 250 MB"})
+        with edit_lock:
+            if edit_state["running"]:return self.reply(409,{"error":"Já existe uma edição em andamento"})
+            edit_state.update(running=True,finished=False,error="",output="",clips=0)
+        source=EDIT_FOLDER/("entrada_"+str(threading.get_ident())+".mp4")
+        try:
+            remaining=length
+            with source.open("wb") as out:
+                while remaining:
+                    chunk=self.rfile.read(min(1024*1024,remaining))
+                    if not chunk:raise ValueError("Upload incompleto")
+                    out.write(chunk);remaining-=len(chunk)
+            threading.Thread(target=edit_worker,args=(source,),daemon=True).start()
+            return self.reply(202,{"ok":True,"message":"Edição iniciada"})
+        except Exception as exc:
+            source.unlink(missing_ok=True)
+            with edit_lock: edit_state.update(running=False,finished=True,error=str(exc))
+            return self.reply(400,{"error":str(exc)})
+
 if __name__=="__main__":
     print("ESTILO CLOUD N1 | Ponte local")
     print("Pasta:",FOLDER)
     print("Abra https://fabiosousan1.github.io/ESTILO-CLOUD-N1/")
     print("Mantenha esta janela aberta durante os downloads.")
-    ThreadingHTTPServer((HOST,PORT),Handler).serve_forever()
+    ThreadingHTTPServer((HOST,PORT),EditorHandler).serve_forever()
