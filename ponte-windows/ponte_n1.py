@@ -11,7 +11,7 @@ FOLDER=Path.home()/"Downloads"/"ESTILO_N1_Referencias"
 FOLDER.mkdir(parents=True,exist_ok=True)
 lock=threading.Lock()
 state={"running":False,"done":0,"total":0,"errors":[],"current":"","finished":False}
-PIN=re.compile(r"^/pin/(\\d+)/?$")
+PIN=re.compile(r"^/pin/(\d+)/?$")
 def normalize(url):
     try:
         p=urlparse(url)
