@@ -6,8 +6,8 @@ import shutil
 import subprocess
 import tempfile
 
-def run(cmd):
-    subprocess.run(cmd, check=True)
+def run(cmd, cwd=None):
+    subprocess.run(cmd, check=True, cwd=cwd)
 
 def duration(video):
     p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -113,7 +113,7 @@ def edit(source, target, subtitle=False, model="tiny"):
                      "PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,"
                      "BorderStyle=1,Outline=2,Alignment=2,MarginV=110'",
                      "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
-                     "-c:a", "copy", str(target)])
+                     "-c:a", "copy", str(target)], cwd=folder)
                 return {"output": str(target), "clips": len(clips), "captions": True}
         shutil.copy2(joined, target)
     return {"output": str(target), "clips": len(clips), "captions": False}
