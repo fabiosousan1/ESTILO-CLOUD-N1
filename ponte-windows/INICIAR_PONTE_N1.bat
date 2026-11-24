@@ -8,6 +8,12 @@ if errorlevel 1 (
  pause
  exit /b 1
 )
+py -3.12 -c "import sys" >nul 2>nul
+if errorlevel 1 (
+ echo Python 3.12 nao encontrado. Instale Python 3.12 antes de continuar.
+ pause
+ exit /b 1
+)
 where ffmpeg >nul 2>nul
 if errorlevel 1 (
  echo FFmpeg nao encontrado. Instale pelo terminal: winget install Gyan.FFmpeg
@@ -15,16 +21,16 @@ if errorlevel 1 (
  pause
  exit /b 1
 )
-py -3 -c "import faster_whisper" >nul 2>nul
+py -3.12 -c "import av; import faster_whisper; assert av.__version__ == '15.1.0'" >nul 2>nul
 if errorlevel 1 (
  echo Instalando legendas gratuitas Whisper. Pode levar alguns minutos...
- py -3 -m pip install faster-whisper
+ py -3.12 -m pip install --only-binary=:all: av==15.1.0 faster-whisper==1.2.1
  if errorlevel 1 (
   echo Falha ao instalar Whisper.
   pause
   exit /b 1
  )
 )
-py -3 ponte_n1.py
+py -3.12 ponte_n1.py
 if errorlevel 1 echo Verifique se Python esta instalado e se a porta 8765 esta livre.
 pause
