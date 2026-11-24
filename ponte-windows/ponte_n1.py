@@ -25,7 +25,7 @@ def worker(urls):
     for url in urls:
         with lock: state["current"]=url
         try:
-            proc=subprocess.run(["py","-3","-m","gallery_dl","-d",str(FOLDER),url],capture_output=True,text=True,timeout=240)
+            proc=subprocess.run(["py","-3","-m","gallery_dl","-d",str(FOLDER),"--download-archive",str(FOLDER/".pinterest-downloads.sqlite3"),"-o","skip=true",url],capture_output=True,text=True,timeout=240)
             if proc.returncode!=0:
                 with lock: state["errors"].append(url+": "+(proc.stderr or proc.stdout)[-220:])
         except Exception as e:
