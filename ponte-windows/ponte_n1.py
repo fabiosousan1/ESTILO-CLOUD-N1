@@ -38,7 +38,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin",ORIGIN)
         self.send_header("Vary","Origin")
         self.send_header("Access-Control-Allow-Methods","GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers","Content-Type")
+        self.send_header("Access-Control-Allow-Headers","Content-Type, X-Video-Name")
         self.send_header("Access-Control-Allow-Private-Network","true")
         self.send_header("Cache-Control","no-store")
     def reply(self,code,obj):
@@ -115,6 +115,37 @@ class EditorHandler(Handler):
             return
         return super().do_GET()
     def do_POST(self):
+        if self.path=="/drive-save":
+            if not self.allowed():return self.reply(403,{"error":"Origem não autorizada"})
+            from urllib.parse import unquote, parse_qs
+            try:
+                length=int(self.headers.get("Content-Length","0"))
+                if length<1 or length>1024*1024*1024:return self.reply(413,{"error":"Máximo de 1 GB"})
+                name=unquote(self.headers.get("X-Video-Name",""))
+                if not name or name in (".","..") or any(c in name for c in '/\\:*?"<>|') or any(ord(c)<32 for c in name) or name.endswith((" ",".")):
+                    return self.reply(400,{"error":"Nome inválido"})
+                folder=FOLDER/"Google Drive"
+                folder.mkdir(exist_ok=True)
+                target=folder/name
+                import tempfile
+                with tempfile.NamedTemporaryFile(dir=folder,delete=False) as out:
+                    temp=Path(out.name)
+                    try:
+                        remaining=length
+                        while remaining:
+                            chunk=self.rfile.read(min(1024*1024,remaining))
+                            if not chunk:raise ValueError("Upload incompleto")
+                            out.write(chunk);remaining-=len(chunk)
+                    except Exception:
+                        out.close();temp.unlink(missing_ok=True);raise
+                try:
+                    with lock:
+                        if target.exists():
+                            return self.reply(200,{"ok":True,"skipped":True,"file":str(target)})
+                        temp.replace(target)
+                    return self.reply(200,{"ok":True,"file":str(target)})
+                finally:temp.unlink(missing_ok=True)
+            except Exception as exc:return self.reply(400,{"error":str(exc)})
         if self.path!="/edit":return super().do_POST()
         if not self.allowed():return self.reply(403,{"error":"Origem não autorizada"})
         if self.headers.get("Content-Type","").split(";")[0]!="video/mp4":
