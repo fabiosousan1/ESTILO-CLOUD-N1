@@ -2,5 +2,9 @@
   {
     "id": "n1-diagnostico-001",
     "tipo": "diagnostico"
+  },
+  {
+    "id": "n1-diagnostico-002",
+    "tipo": "diagnostico"
   }
 ]
